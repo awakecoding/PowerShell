@@ -186,6 +186,11 @@ namespace System.Management.Automation
         public bool IsOSBinary { get; internal set; }
 
         /// <summary>
+        /// True if a portable verifier already validated explicit trust for this signature.
+        /// </summary>
+        internal bool PortableTrustVerified { get; set; }
+
+        /// <summary>
         /// Gets the Subject Alternative Name from the signer certificate.
         /// </summary>
         public string[] SubjectAlternativeName { get; private set; }
@@ -263,6 +268,25 @@ namespace System.Management.Automation
             Init(filePath, null, error, null);
         }
 
+        internal Signature(
+            string filePath,
+            SignatureStatus status,
+            string statusMessage,
+            X509Certificate2 signer,
+            X509Certificate2 timestamper)
+        {
+            Utils.CheckArgForNullOrEmpty(filePath, "filePath");
+
+            _path = filePath;
+            _win32Error = Win32Errors.E_FAIL;
+            _signerCert = signer;
+            _timeStamperCert = timestamper;
+            _status = status;
+            _statusMessage = statusMessage ?? GetSignatureStatusMessage(status, Win32Errors.E_FAIL, filePath);
+            SignatureType = SignatureType.None;
+            SubjectAlternativeName = GetSubjectAlternativeName(signer);
+        }
+
         private void Init(string filePath,
                           X509Certificate2 signer,
                           DWORD error,
@@ -315,6 +339,7 @@ namespace System.Management.Automation
                     break;
 
                 case Win32Errors.TRUST_E_EXPLICIT_DISTRUST:
+                case Win32Errors.CERT_E_UNTRUSTEDROOT:
                     isc = SignatureStatus.NotTrusted;
                     break;
             }

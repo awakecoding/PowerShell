@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Management.Automation;
@@ -140,6 +141,7 @@ namespace Microsoft.PowerShell
             // Get the execution policy
             _executionPolicy = SecuritySupport.GetExecutionPolicy(_shellId);
 
+#if !UNIX
             // Always check the SAFER APIs if code integrity isn't being handled system-wide through
             // WLDP or AppLocker. In those cases, the scripts will be run in ConstrainedLanguage.
             // Otherwise, block.
@@ -182,6 +184,7 @@ namespace Microsoft.PowerShell
                     return false;
                 }
             }
+#endif
 
             // WLDP and Applocker takes priority over powershell execution policy.
             // See if they want to bypass the authorization manager
@@ -416,9 +419,10 @@ namespace Microsoft.PowerShell
         private static bool IsLocalFile(string filename)
         {
 #if UNIX
-            return true;
+            SecurityZone zone = GetUnixFileSecurityZone(filename);
 #else
             SecurityZone zone = ClrFacade.GetFileSecurityZone(filename);
+#endif
 
             if (zone == SecurityZone.MyComputer ||
                 zone == SecurityZone.Intranet ||
@@ -428,8 +432,58 @@ namespace Microsoft.PowerShell
             }
 
             return false;
-#endif
         }
+
+#if UNIX
+        private static SecurityZone GetUnixFileSecurityZone(string filename)
+        {
+            foreach (string markerPath in GetUnixZoneIdentifierPaths(filename))
+            {
+                if (!File.Exists(markerPath))
+                {
+                    continue;
+                }
+
+                SecurityZone zone = ReadUnixZoneIdentifier(markerPath);
+                if (zone != SecurityZone.NoZone)
+                {
+                    return zone;
+                }
+            }
+
+            return SecurityZone.MyComputer;
+        }
+
+        private static IEnumerable<string> GetUnixZoneIdentifierPaths(string filename)
+        {
+            yield return filename + ".Zone.Identifier";
+            yield return filename + ":Zone.Identifier";
+        }
+
+        private static SecurityZone ReadUnixZoneIdentifier(string markerPath)
+        {
+            foreach (string line in File.ReadLines(markerPath))
+            {
+                string trimmed = line.Trim();
+                if (!trimmed.StartsWith("ZoneId", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                string[] parts = trimmed.Split('=', 2);
+                if (parts.Length != 2 || !int.TryParse(parts[1].Trim(), out int zoneId))
+                {
+                    return SecurityZone.NoZone;
+                }
+
+                return Enum.IsDefined(typeof(SecurityZone), zoneId)
+                    ? (SecurityZone)zoneId
+                    : SecurityZone.NoZone;
+            }
+
+            return SecurityZone.NoZone;
+        }
+#endif
 
         // Checks that a publisher is trusted by the system or is one of
         // the signed product binaries
@@ -437,6 +491,18 @@ namespace Microsoft.PowerShell
         {
             // Get the thumbprint of the current signature
             X509Certificate2 signerCertificate = signature.SignerCertificate;
+            if (signerCertificate == null)
+            {
+                return false;
+            }
+
+#if UNIX
+            if (signature.PortableTrustVerified)
+            {
+                return !IsUntrustedPublisher(signature, file);
+            }
+#endif
+
             string thumbprint = signerCertificate.Thumbprint;
 
             // See if it matches any in the list of trusted publishers
@@ -461,6 +527,11 @@ namespace Microsoft.PowerShell
         {
             // Get the thumbprint of the current signature
             X509Certificate2 signerCertificate = signature.SignerCertificate;
+            if (signerCertificate == null)
+            {
+                return false;
+            }
+
             string thumbprint = signerCertificate.Thumbprint;
 
             // See if it matches any in the list of trusted publishers

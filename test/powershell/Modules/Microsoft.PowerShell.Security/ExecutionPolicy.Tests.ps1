@@ -9,8 +9,15 @@ Import-Module HelpersCommon
 Describe "ExecutionPolicy" -Tags "CI" {
 
     Context "Check Get-ExecutionPolicy behavior" {
-        It "Should unrestricted when not on Windows" -Skip:$IsWindows {
-            Get-ExecutionPolicy | Should -Be Unrestricted
+        It "Should read process execution policy when not on Windows" -Skip:$IsWindows {
+            $originalExecutionPolicy = Get-ExecutionPolicy -Scope Process
+            try {
+                Set-ExecutionPolicy -Force -Scope Process -ExecutionPolicy AllSigned
+                Get-ExecutionPolicy | Should -Be AllSigned
+            }
+            finally {
+                Set-ExecutionPolicy -Force -Scope Process -ExecutionPolicy $originalExecutionPolicy
+            }
         }
 
         It "Should return Microsoft.Powershell.ExecutionPolicy PSObject on Windows" -Skip:($IsLinux -Or $IsMacOS) {
@@ -19,14 +26,69 @@ Describe "ExecutionPolicy" -Tags "CI" {
     }
 
     Context "Check Set-ExecutionPolicy behavior" {
-        It "Should throw PlatformNotSupported when not on Windows" -Skip:$IsWindows {
-            { Set-ExecutionPolicy Unrestricted } | Should -Throw "Operation is not supported on this platform."
+        It "Should set process execution policy when not on Windows" -Skip:$IsWindows {
+            $originalExecutionPolicy = Get-ExecutionPolicy -Scope Process
+            try {
+                { Set-ExecutionPolicy -Force -Scope Process -ExecutionPolicy Unrestricted } | Should -Not -Throw
+                Get-ExecutionPolicy -Scope Process | Should -Be Unrestricted
+            }
+            finally {
+                Set-ExecutionPolicy -Force -Scope Process -ExecutionPolicy $originalExecutionPolicy
+            }
         }
 
         It "Should succeed on Windows" -Skip:($IsLinux -Or $IsMacOS) {
             # We use the Process scope to avoid affecting the system
             # Unrestricted is assumed "safe", otherwise these tests would not be running
             { Set-ExecutionPolicy -Force -Scope Process -ExecutionPolicy Unrestricted } | Should -Not -Throw
+        }
+    }
+
+    Context "Portable Unix execution policy enforcement" {
+        BeforeEach {
+            $script:OriginalExecutionPolicy = Get-ExecutionPolicy -Scope Process
+        }
+
+        AfterEach {
+            Set-ExecutionPolicy -Force -Scope Process -ExecutionPolicy $script:OriginalExecutionPolicy
+        }
+
+        It "Should reject unsigned scripts under AllSigned on non-Windows" -Skip:$IsWindows {
+            $scriptPath = Join-Path -Path $TestDrive -ChildPath "unsigned.ps1"
+            Set-Content -Path $scriptPath -Value "'unsigned script executed'" -NoNewline
+
+            Set-ExecutionPolicy -Force -Scope Process -ExecutionPolicy AllSigned
+            $exception = { & $scriptPath } | Should -Throw -PassThru
+            $exception.Exception | Should -BeOfType System.Management.Automation.PSSecurityException
+        }
+
+        It "Should reject unsigned script modules under AllSigned on non-Windows" -Skip:$IsWindows {
+            $moduleRoot = Join-Path -Path $TestDrive -ChildPath "UnsignedPolicyModule"
+            $null = New-Item -Path $moduleRoot -ItemType Directory -Force
+            $modulePath = Join-Path -Path $moduleRoot -ChildPath "UnsignedPolicyModule.psm1"
+            Set-Content -Path $modulePath -Value "function Get-UnsignedPolicyModuleValue { 42 }" -NoNewline
+
+            Set-ExecutionPolicy -Force -Scope Process -ExecutionPolicy AllSigned
+            $exception = { Import-Module $modulePath -Force -ErrorAction Stop } | Should -Throw -PassThru
+            $exception.Exception | Should -BeOfType System.Management.Automation.PSSecurityException
+        }
+
+        It "Should allow unsigned local scripts under RemoteSigned on non-Windows" -Skip:$IsWindows {
+            $scriptPath = Join-Path -Path $TestDrive -ChildPath "local-unsigned.ps1"
+            Set-Content -Path $scriptPath -Value "'local unsigned script executed'" -NoNewline
+
+            Set-ExecutionPolicy -Force -Scope Process -ExecutionPolicy RemoteSigned
+            & $scriptPath | Should -BeExactly "local unsigned script executed"
+        }
+
+        It "Should reject unsigned scripts with portable zone marker under RemoteSigned on non-Windows" -Skip:$IsWindows {
+            $scriptPath = Join-Path -Path $TestDrive -ChildPath "remote-unsigned.ps1"
+            Set-Content -Path $scriptPath -Value "'remote unsigned script executed'" -NoNewline
+            Set-Content -Path "$scriptPath.Zone.Identifier" -Value "[ZoneTransfer]`nZoneId=3"
+
+            Set-ExecutionPolicy -Force -Scope Process -ExecutionPolicy RemoteSigned
+            $exception = { & $scriptPath } | Should -Throw -PassThru
+            $exception.Exception | Should -BeOfType System.Management.Automation.PSSecurityException
         }
     }
 }

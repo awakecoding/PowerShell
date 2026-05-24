@@ -76,15 +76,6 @@ namespace System.Management.Automation
                                         CommandOrigin origin,
                                         PSHost host)
         {
-#if UNIX
-            // TODO:PSL this is a workaround since the exception below
-            // hides the internal issue of what's going on in terms of
-            // execution policy.
-            // On non-Windows platform Set/Get-ExecutionPolicy throw
-            // PlatformNotSupportedException
-            return;
-#else
-
 #if DEBUG
             // If we are debugging, let the unit tests swap the file from beneath us
             if (commandInfo.CommandType == CommandTypes.ExternalScript)
@@ -145,7 +136,6 @@ namespace System.Management.Automation
                     throw new PSSecurityException(AuthorizationManagerBase.AuthorizationManagerDefaultFailureReason);
                 }
             }
-#endif
         }
 
         /// <summary>

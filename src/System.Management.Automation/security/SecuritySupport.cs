@@ -135,9 +135,6 @@ namespace System.Management.Automation.Internal
 
         internal static void SetExecutionPolicy(ExecutionPolicyScope scope, ExecutionPolicy policy, string shellId)
         {
-#if UNIX
-            throw new PlatformNotSupportedException();
-#else
             string executionPolicy = "Restricted";
 
             switch (policy)
@@ -198,7 +195,6 @@ namespace System.Management.Automation.Internal
 
                     break;
             }
-#endif
         }
 
         internal static ExecutionPolicy GetExecutionPolicy(string shellId)
@@ -279,9 +275,6 @@ namespace System.Management.Automation.Internal
 
         internal static ExecutionPolicy GetExecutionPolicy(string shellId, ExecutionPolicyScope scope)
         {
-#if UNIX
-            return ExecutionPolicy.Unrestricted;
-#else
             switch (scope)
             {
                 case ExecutionPolicyScope.Process:
@@ -310,6 +303,9 @@ namespace System.Management.Automation.Internal
                 case ExecutionPolicyScope.UserPolicy:
                 case ExecutionPolicyScope.MachinePolicy:
                     {
+#if UNIX
+                        return ExecutionPolicy.Undefined;
+#else
                         string groupPolicyPreference = GetGroupPolicyValue(shellId, scope);
 
                         // Be sure we aren't being called by Group Policy
@@ -321,11 +317,11 @@ namespace System.Management.Automation.Internal
                         }
 
                         return ParseExecutionPolicy(groupPolicyPreference);
+#endif
                     }
             }
 
             return ExecutionPolicy.Restricted;
-#endif
         }
 
         internal static ExecutionPolicy ParseExecutionPolicy(string policy)

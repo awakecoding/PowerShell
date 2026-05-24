@@ -277,6 +277,9 @@ namespace System.Management.Automation
         /// </exception>
         internal static Signature GetSignature(string fileName, byte[] fileContent)
         {
+#if UNIX
+            return PortablePsignSignatureProvider.GetSignature(fileName, fileContent);
+#else
             Signature signature = null;
 
             if (fileContent == null)
@@ -293,6 +296,7 @@ namespace System.Management.Automation
             }
 
             return signature;
+#endif
         }
 
         /// <summary>

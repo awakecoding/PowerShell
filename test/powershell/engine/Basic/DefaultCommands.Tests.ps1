@@ -289,7 +289,7 @@ Describe "Verify aliases and cmdlets" -Tags "CI" {
 "Cmdlet",       "Format-Wide",                      "",                                 $($FullCLR -or $CoreWindows -or $CoreUnix),     "",                     "",                     "None"
 "Cmdlet",       "Get-Acl",                          "",                                 $($FullCLR -or $CoreWindows              ),     "",                     "",                     "None"
 "Cmdlet",       "Get-Alias",                        "",                                 $($FullCLR -or $CoreWindows -or $CoreUnix),     "",                     "",                     "None"
-"Cmdlet",       "Get-AuthenticodeSignature",        "",                                 $($FullCLR -or $CoreWindows              ),     "",                     "",                     "None"
+"Cmdlet",       "Get-AuthenticodeSignature",        "",                                 $($FullCLR -or $CoreWindows -or $CoreUnix),     "",                     "",                     "None"
 "Cmdlet",       "Get-ChildItem",                    "",                                 $($FullCLR -or $CoreWindows -or $CoreUnix),     "",                     "",                     "None"
 "Cmdlet",       "Get-CimAssociatedInstance",        "",                                 $($FullCLR -or $CoreWindows              ),     "",                     "",                     "None"
 "Cmdlet",       "Get-CimClass",                     "",                                 $($FullCLR -or $CoreWindows              ),     "",                     "",                     "None"

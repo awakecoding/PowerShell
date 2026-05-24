@@ -24,6 +24,21 @@ Describe "Windows platform file signatures" -Tags 'Feature' {
     }
 }
 
+Describe "Portable Unix PowerShell file signatures" -Tags 'Feature' {
+    It "Reports unsigned PowerShell script content when psign native validation is available" -Skip:$IsWindows {
+        $fileBytes = [System.Text.Encoding]::UTF8.GetBytes("'unsigned script content'")
+        $signature = Get-AuthenticodeSignature -Content $fileBytes -SourcePathOrExtension .ps1
+
+        if ($signature.Status -eq "Incompatible") {
+            Set-ItResult -Skipped -Because "psign-core native library is not available to the test host."
+            return
+        }
+
+        $signature.Status | Should -BeExactly "NotSigned"
+        $signature.SignatureType | Should -BeExactly "None"
+    }
+}
+
 Describe "Windows file content signatures" -Tags @('Feature', 'RequireAdminOnWindows') {
     BeforeAll {
         $shouldSkip = (-not $IsWindows) -or (Test-IsWinServer2012R2)
